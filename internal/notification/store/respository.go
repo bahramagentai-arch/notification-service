@@ -5,21 +5,17 @@ import (
 	"errors"
 	"fmt"
 
-	notification "github.com/BahramRousta/notification-service/internal/notification/domain"
+	domain "github.com/BahramRousta/notification-service/internal/notification/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func (s *Store)TruncateForTest (ctx context.Context) error{
-	const q= `TRUNCATE TABLE messages RESTART IDENTITY CASCADE;`
-	_, err := s.pool.Exec(ctx, q)
-	if err != nil {
-		return fmt.Errorf("postgres: truncate for test: %w", err)
-	}
-	return nil
+type Repository interface {
+	Create(ctx context.Context, msg *domain.Message) error
+	
 }
 
-func (s *Store) Create(ctx context.Context, msg *notification.Message) error {
+func (s *Store) Create(ctx context.Context, msg *domain.Message) error {
 	const q = `
 		INSERT INTO messages (
 			id, idempotency_key, recipient, body,
@@ -53,7 +49,7 @@ func (s *Store) Create(ctx context.Context, msg *notification.Message) error {
 	_, err := s.pool.Exec(ctx, q, args)
 	if err != nil {
 		if isDuplicateKey(err) {
-			return fmt.Errorf("%w: key=%s", notification.ErrDuplicate, msg.IdempotencyKey)
+			return fmt.Errorf("%w: key=%s", domain.ErrDuplicate, msg.IdempotencyKey)
 		}
 		return fmt.Errorf("postgres: create message: %w", err)
 	}
