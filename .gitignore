@@ -1,0 +1,46 @@
+
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output of the go coverage tool
+coverage.out
+
+# Build directories and output
+bin/
+_build/
+out/
+
+# Dependency directories
+vendor/
+pkg/mod/
+
+# IDE/editor dirs and files
+.vscode/
+.idea/
+*.iml
+
+# OS generated files
+.DS_Store
+
+# Environment files
+.env
+.env.local
+
+# Logs and editor backups
+*.log
+*~
+
+# test and cache
+.cache
+coverage/
+
+# project-specific
+.qodo/
+
+# cgo
+_cgo_
+
