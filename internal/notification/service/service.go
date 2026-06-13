@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -14,12 +15,17 @@ import (
 const defaultMaxAttempts = 3
 const maxBodyRunes = 1600
 
+
+type Service interface {
+	Send(ctx context.Context, req SendRequest) (*domain.Message, error)
+}
+
 type NotificationService struct {
 	repo   store.Repository
 	logger *slog.Logger
 }
 
-func New(repo store.Repository, logger *slog.Logger) *NotificationService {
+func NewService(repo store.Repository, logger *slog.Logger) *NotificationService {
 	return &NotificationService{
 		repo:   repo,
 		logger: logger,
@@ -35,16 +41,34 @@ type SendRequest struct {
 
 func (s *NotificationService) Send(ctx context.Context, req SendRequest) (*domain.Message, error) {
 
+	if err := validateRequest(req); err != nil {
+		return nil, err
+	}
+
+	if req.IdempotencyKey != ""{
+		existing, err := s.repo.GetByIdempotencyKey(ctx, req.IdempotencyKey)
+		if err == nil {
+			s.logger.Info("idempotency key already exists, returning existing message",
+				slog.String("idempotency_key", req.IdempotencyKey),
+				slog.String("msg_id", existing.ID),
+				slog.String("status", string(existing.Status)),
+			)
+			return existing, nil
+		}
+
+		if !errors.Is(err, domain.ErrNotFound) {
+			return nil, fmt.Errorf("service: check idempotency key: %w", err)
+		}
+	}
 	now := time.Now().UTC()
 	msg := &domain.Message{
-		// uuid.NewString() generates a v4 UUID — random and globally unique.
 		ID:             uuid.NewString(),
 		IdempotencyKey: req.IdempotencyKey,
 		Recipient:      req.Recipient,
 		Body:           req.Body,
 		Channel:        domain.ChannelSMS,
 		Priority:       req.Priority,
-		Status:         domain.StatusPending, // always starts as PENDING
+		Status:         domain.StatusPending,
 		Attempts:       0,
 		MaxAttempts:    defaultMaxAttempts,
 		CreatedAt:      now,
