@@ -15,9 +15,9 @@ import (
 const defaultMaxAttempts = 3
 const maxBodyRunes = 1600
 
-
 type Service interface {
 	Send(ctx context.Context, req SendRequest) (*domain.Message, error)
+	GetByID(ctx context.Context, id string) (*domain.Message, error)
 }
 
 type NotificationService struct {
@@ -45,7 +45,7 @@ func (s *NotificationService) Send(ctx context.Context, req SendRequest) (*domai
 		return nil, err
 	}
 
-	if req.IdempotencyKey != ""{
+	if req.IdempotencyKey != "" {
 		existing, err := s.repo.GetByIdempotencyKey(ctx, req.IdempotencyKey)
 		if err == nil {
 			s.logger.Info("idempotency key already exists, returning existing message",
@@ -84,4 +84,14 @@ func (s *NotificationService) Send(ctx context.Context, req SendRequest) (*domai
 		slog.Int("priority", int(msg.Priority)),
 	)
 	return msg, nil
+}
+
+
+func (s *NotificationService) GetByID(ctx context.Context, id string)(*domain.Message, error){
+	msg, err := s.repo.GetByID(ctx, id)
+	if err != nil{
+		return nil, fmt.Errorf("service: get message: %w", err)
+	}
+	return msg, nil
+
 }

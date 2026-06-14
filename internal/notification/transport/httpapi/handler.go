@@ -24,6 +24,7 @@ func New(svc service.Service, l *slog.Logger) *Handler {
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/messages/", h.CreateMessage)
+	mux.HandleFunc("GET /v1/messages/{id}", h.GetMessage)
 }
 
 type CreateMessageRequest struct {
@@ -73,6 +74,20 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, msg)
 }
 
+func (h *Handler) writeServiceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, domain.ErrInvalidRecipient), errors.Is(err, domain.ToLongBodyLen):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, domain.ErrDuplicate):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	default:
+		h.logger.Error("unexpected service error", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
 func (h *Handler) CreateMessage(w http.ResponseWriter, r *http.Request) {
 	var req CreateMessageRequest
 
@@ -96,16 +111,19 @@ func (h *Handler) CreateMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, toResponse(msg))
 }
 
-func (h *Handler) writeServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, domain.ErrInvalidRecipient), errors.Is(err, domain.ToLongBodyLen):
-		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, domain.ErrDuplicate):
-		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, domain.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	default:
-		h.logger.Error("unexpected service error", slog.String("error", err.Error()))
-		writeError(w, http.StatusInternalServerError, "internal server error")
+
+func(h *Handler) GetMessage (w http.ResponseWriter, r *http.Request){
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "missing message id")
+		return
 	}
+
+	msg, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toResponse(msg))
 }

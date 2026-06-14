@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-
 const msgColumns = `
 	id, idempotency_key, recipient, body,
 	channel, priority, status,
@@ -18,11 +17,10 @@ const msgColumns = `
 	provider_msg_id, failure_reason,
 	created_at, updated_at`
 
-
-
 type Repository interface {
 	Create(ctx context.Context, msg *domain.Message) error
-	GetByIdempotencyKey (ctx context.Context, key string)(*domain.Message, error)
+	GetByIdempotencyKey(ctx context.Context, key string) (*domain.Message, error)
+	GetByID(ctx context.Context, id string) (*domain.Message, error)
 }
 
 func (s *Store) Create(ctx context.Context, msg *domain.Message) error {
@@ -66,8 +64,7 @@ func (s *Store) Create(ctx context.Context, msg *domain.Message) error {
 	return nil
 }
 
-
-func isDuplicateKey(err error)bool{
+func isDuplicateKey(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation
 }
@@ -75,7 +72,7 @@ func isDuplicateKey(err error)bool{
 type scanner interface {
 	Scan(dest ...any) error
 }
- 
+
 func scanMessage(s scanner) (*domain.Message, error) {
 	var (
 		msg     domain.Message
@@ -103,16 +100,31 @@ func scanMessage(s scanner) (*domain.Message, error) {
 	return &msg, nil
 }
 
-func (s *Store) GetByIdempotencyKey (ctx context.Context, key string)(*domain.Message, error) {
+func (s *Store) GetByIdempotencyKey(ctx context.Context, key string) (*domain.Message, error) {
 	const q = `SELECT ` + msgColumns + ` FROM messages WHERE idempotency_key = @key ;`
 	row := s.pool.QueryRow(ctx, q, pgx.NamedArgs{"key": key})
 	msg, err := scanMessage(row)
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows){
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: idempotency_key=%s", domain.ErrNotFound, key)
 		}
 		return nil, fmt.Errorf("postgres: get by idempotency key: %w", err)
 	}
 	return msg, nil
-}	
+}
+
+
+func (s *Store) GetByID(ctx context.Context, id string)(*domain.Message, error){
+	const q = `SELECT ` + msgColumns + ` FROM messages where id = @id;`
+
+	row := s.pool.QueryRow(ctx, q, pgx.NamedArgs{"id": id})
+	msg, err := scanMessage(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows){
+			return nil, fmt.Errorf("%w: id=%s", domain.ErrNotFound, id)
+		}
+		return nil, fmt.Errorf("postgres: get by id: %w", err)
+	}
+	return msg, nil
+}
