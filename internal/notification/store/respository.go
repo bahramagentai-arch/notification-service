@@ -110,7 +110,7 @@ func (s *Store) GetByIdempotencyKey (ctx context.Context, key string)(*domain.Me
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows){
-			return nil, fmt.Errorf("%w: idempotncy_key=%s", domain.EmptyBody, key)
+			return nil, fmt.Errorf("%w: idempotency_key=%s", domain.ErrNotFound, key)
 		}
 		return nil, fmt.Errorf("postgres: get by idempotency key: %w", err)
 	}
